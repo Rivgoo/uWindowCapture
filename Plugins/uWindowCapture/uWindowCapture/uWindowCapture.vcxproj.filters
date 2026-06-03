@@ -1,52 +1,63 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Include">
+    <Filter Include="Unity">
       <UniqueIdentifier>{a820eab3-2c2a-4d56-9670-064198e6a1cf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Graphics">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Capture">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\IUnityInterface.h">
-      <Filter>Include</Filter>
-    </ClInclude>
-    <ClInclude Include="include\IUnityGraphics.h">
-      <Filter>Include</Filter>
-    </ClInclude>
-    <ClInclude Include="include\IUnityGraphicsD3D11.h">
-      <Filter>Include</Filter>
-    </ClInclude>
-    <ClInclude Include="Debug.h" />
-    <ClInclude Include="Window.h" />
-    <ClInclude Include="WindowManager.h" />
-    <ClInclude Include="Thread.h" />
-    <ClInclude Include="Util.h" />
-    <ClInclude Include="Buffer.h" />
-    <ClInclude Include="Message.h" />
-    <ClInclude Include="Singleton.h" />
-    <ClInclude Include="Unity.h" />
-    <ClInclude Include="CaptureManager.h" />
-    <ClInclude Include="UploadManager.h" />
-    <ClInclude Include="WindowQueue.h" />
-    <ClInclude Include="WindowTexture.h" />
-    <ClInclude Include="IconTexture.h" />
-    <ClInclude Include="Cursor.h" />
-    <ClInclude Include="WindowsGraphicsCapture.h" />
+    <ClInclude Include="Unity\IUnityInterface.h"><Filter>Unity</Filter></ClInclude>
+    <ClInclude Include="Unity\IUnityGraphics.h"><Filter>Unity</Filter></ClInclude>
+    <ClInclude Include="Unity\IUnityGraphicsD3D11.h"><Filter>Unity</Filter></ClInclude>
+    <ClInclude Include="Unity\IUnityGraphicsD3D12.h"><Filter>Unity</Filter></ClInclude>
+    <ClInclude Include="Core\Buffer.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="Core\Debug.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="Core\Message.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="Core\Singleton.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="Core\Thread.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="Core\Unity.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="Core\Util.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="Core\WindowQueue.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="Graphics\IGraphicsContext.h"><Filter>Graphics</Filter></ClInclude>
+    <ClInclude Include="Graphics\GraphicsManager.h"><Filter>Graphics</Filter></ClInclude>
+    <ClInclude Include="Graphics\D3D11Context.h"><Filter>Graphics</Filter></ClInclude>
+    <ClInclude Include="Graphics\D3D12Context.h"><Filter>Graphics</Filter></ClInclude>
+    <ClInclude Include="Capture\CaptureManager.h"><Filter>Capture</Filter></ClInclude>
+    <ClInclude Include="Capture\Cursor.h"><Filter>Capture</Filter></ClInclude>
+    <ClInclude Include="Capture\IconTexture.h"><Filter>Capture</Filter></ClInclude>
+    <ClInclude Include="Capture\UploadManager.h"><Filter>Capture</Filter></ClInclude>
+    <ClInclude Include="Capture\Window.h"><Filter>Capture</Filter></ClInclude>
+    <ClInclude Include="Capture\WindowManager.h"><Filter>Capture</Filter></ClInclude>
+    <ClInclude Include="Capture\WindowTexture.h"><Filter>Capture</Filter></ClInclude>
+    <ClInclude Include="Capture\WindowsGraphicsCapture.h"><Filter>Capture</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Main.cpp" />
-    <ClCompile Include="Debug.cpp" />
-    <ClCompile Include="Window.cpp" />
-    <ClCompile Include="WindowManager.cpp" />
-    <ClCompile Include="Thread.cpp" />
-    <ClCompile Include="Util.cpp" />
-    <ClCompile Include="Message.cpp" />
-    <ClCompile Include="Unity.cpp" />
-    <ClCompile Include="CaptureManager.cpp" />
-    <ClCompile Include="UploadManager.cpp" />
-    <ClCompile Include="WindowQueue.cpp" />
-    <ClCompile Include="WindowTexture.cpp" />
-    <ClCompile Include="IconTexture.cpp" />
-    <ClCompile Include="Cursor.cpp" />
-    <ClCompile Include="WindowsGraphicsCapture.cpp" />
+    <ClCompile Include="Core\Main.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="Core\Debug.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="Core\Message.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="Core\Thread.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="Core\Unity.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="Core\Util.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="Core\WindowQueue.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="Graphics\GraphicsManager.cpp"><Filter>Graphics</Filter></ClCompile>
+    <ClCompile Include="Graphics\D3D11Context.cpp"><Filter>Graphics</Filter></ClCompile>
+    <ClCompile Include="Graphics\D3D12Context.cpp"><Filter>Graphics</Filter></ClCompile>
+    <ClCompile Include="Capture\CaptureManager.cpp"><Filter>Capture</Filter></ClCompile>
+    <ClCompile Include="Capture\Cursor.cpp"><Filter>Capture</Filter></ClCompile>
+    <ClCompile Include="Capture\IconTexture.cpp"><Filter>Capture</Filter></ClCompile>
+    <ClCompile Include="Capture\UploadManager.cpp"><Filter>Capture</Filter></ClCompile>
+    <ClCompile Include="Capture\Window.cpp"><Filter>Capture</Filter></ClCompile>
+    <ClCompile Include="Capture\WindowManager.cpp"><Filter>Capture</Filter></ClCompile>
+    <ClCompile Include="Capture\WindowTexture.cpp"><Filter>Capture</Filter></ClCompile>
+    <ClCompile Include="Capture\WindowsGraphicsCapture.cpp"><Filter>Capture</Filter></ClCompile>
   </ItemGroup>
 </Project>
