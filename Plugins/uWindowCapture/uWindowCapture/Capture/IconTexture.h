@@ -7,12 +7,14 @@
 #include <string>
 #include <mutex>
 #include <atomic>
+#include <memory>
 
 #include "../Core/Buffer.h"
 
-
 class Window;
-
+namespace uWindowCapture {
+    class SharedTextureResource;
+}
 
 class IconTexture
 {
@@ -44,8 +46,7 @@ private:
     HICON hIcon_ = nullptr;
 
     std::atomic<ID3D11Texture2D*> unityTexture_ = nullptr;
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> sharedTexture_;
-    HANDLE sharedHandle_ = nullptr;
+    std::shared_ptr<uWindowCapture::SharedTextureResource> sharedResource_;
     std::mutex sharedTextureMutex_;
 
     Buffer<BYTE> buffer_;
@@ -58,5 +59,4 @@ private:
     UINT width_ = 0;
     UINT height_ = 0;
     std::wstring appLogoPath_;
-
 };

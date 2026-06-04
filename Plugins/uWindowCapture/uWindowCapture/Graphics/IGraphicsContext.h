@@ -1,21 +1,22 @@
 #pragma once
-#include <d3d11.h>
-#include <wrl/client.h>
+#include "../Unity/IUnityInterface.h"
+
+namespace uWindowCapture {
+
+class SharedTextureResource;
 
 class IGraphicsContext {
 public:
     virtual ~IGraphicsContext() = default;
     
-    virtual bool Initialize() = 0;
+    virtual bool Initialize(IUnityInterfaces* unityInterfaces) = 0;
     virtual void Finalize() = 0;
     
-    virtual void Lock() = 0;
-    virtual void Unlock() = 0;
-    
-    virtual ID3D11Device* GetDevice() = 0;
-    virtual ID3D11DeviceContext* GetContext() = 0;
-    
-    virtual Microsoft::WRL::ComPtr<ID3D11Texture2D> CreateTexture(int width, int height) = 0;
-    virtual void UpdateUnityTexture(void* unityTexturePtr, ID3D11Texture2D* source) = 0;
-    virtual void ReleaseUnityTexture(void* unityTexturePtr) = 0;
+    virtual void RenderEvent(int eventId) = 0;
+
+    // Called by Unity components to register a shared resource for updating a specific Unity texture
+    virtual void RegisterSharedResource(void* unityTexturePtr, SharedTextureResource* sharedResource) = 0;
+    virtual void UnregisterSharedResource(void* unityTexturePtr) = 0;
 };
+
+} 

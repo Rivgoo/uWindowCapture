@@ -12,18 +12,9 @@ UWC_SINGLETON_INSTANCE(WindowManager)
 
 void WindowManager::Initialize()
 {
-    // FIX #2: Correct initialization order (UploadManager first)
-    {
-        UWC_SCOPE_TIMER(InitUploadManager);
-        uploadManager_ = std::make_unique<UploadManager>();
-    }
     {
         UWC_SCOPE_TIMER(InitWindowsGraphicsCaptureManager);
         windowsGraphicsCaptureManager_ = std::make_unique<WindowsGraphicsCaptureManager>();
-    }
-    {
-        UWC_SCOPE_TIMER(InitCaptureManager);
-        captureManager_ = std::make_unique<CaptureManager>();
     }
     {
         UWC_SCOPE_TIMER(Cursor);
@@ -37,11 +28,8 @@ void WindowManager::Initialize()
 
 void WindowManager::Finalize()
 {
-    // FIX #2: Correct destruction order
     StopWindowHandleListThread();
-    captureManager_.reset();
     cursor_.reset();
-    uploadManager_.reset();
     windowsGraphicsCaptureManager_.reset();
 
     {
@@ -66,9 +54,7 @@ void WindowManager::Render()
 
 void WindowManager::StartWindowHandleListThread()
 {
-    // FIX #3: WinRT Apartment for Handle List Thread
     windowHandleListThreadLoop_.SetWinRtApartment(true);
-
     windowHandleListThreadLoop_.Start([this]
     {
         UpdateWindowHandleList();
@@ -79,16 +65,6 @@ void WindowManager::StartWindowHandleListThread()
 void WindowManager::StopWindowHandleListThread()
 {
     windowHandleListThreadLoop_.Stop();
-}
-
-const std::unique_ptr<CaptureManager>& WindowManager::GetCaptureManager()
-{
-    return WindowManager::Get().captureManager_;
-}
-
-const std::unique_ptr<UploadManager>& WindowManager::GetUploadManager()
-{
-    return WindowManager::Get().uploadManager_;
 }
 
 const std::unique_ptr<WindowsGraphicsCaptureManager>& WindowManager::GetWindowsGraphicsCaptureManager()
@@ -110,42 +86,29 @@ bool WindowManager::CheckExistence(int id) const
 std::shared_ptr<Window> WindowManager::GetWindow(int id) const
 {
     std::scoped_lock lock(windowsListMutex_);
-
     auto it = windows_.find(id);
-    if (it == windows_.end())
-    {
-        return nullptr;
-    }
-
+    if (it == windows_.end()) return nullptr;
     return it->second;
 }
 
 std::shared_ptr<Window> WindowManager::GetWindowFromPoint(POINT point) const
 {
     auto hWnd = ::WindowFromPoint(point);
-
     while (hWnd != NULL)
     {
         DWORD thread, process;
         thread = ::GetWindowThreadProcessId(hWnd, &process);
-
         std::shared_ptr<Window> parent;
         int maxZOrder = INT_MAX;
 
         {
             std::scoped_lock lock(windowsListMutex_);
-
             for (const auto& pair : windows_)
             {
                 const auto& window = pair.second;
+                if (window->GetWindowHandle() == hWnd) return window;
 
-                if (window->GetWindowHandle() == hWnd)
-                {
-                    return window;
-                }
-
-                if ((window->GetThreadId()  == thread) &&
-                    (window->GetProcessId() == process))
+                if ((window->GetThreadId()  == thread) && (window->GetProcessId() == process))
                 {
                     const int zOrder = window->GetZOrder();
                     if (zOrder > maxZOrder)
@@ -156,15 +119,9 @@ std::shared_ptr<Window> WindowManager::GetWindowFromPoint(POINT point) const
                 }
             }
         }
-
-        if (parent)
-        {
-            return parent;
-        }
-
+        if (parent) return parent;
         hWnd = ::GetAncestor(hWnd, GA_PARENT);
     }
-
     return nullptr;
 }
 
@@ -175,9 +132,7 @@ std::shared_ptr<Window> WindowManager::GetCursorWindow() const
 
 std::shared_ptr<Window> WindowManager::FindParentWindow(const std::shared_ptr<Window>& window) const
 {
-    // FIX #12: Safe locking for FindParentWindow
     std::scoped_lock lock(windowsListMutex_);
-
     std::shared_ptr<Window> parent = nullptr;
     int minDeltaZOrder = INT_MAX;
     int selfZOrder     = window->GetZOrder();
@@ -185,21 +140,13 @@ std::shared_ptr<Window> WindowManager::FindParentWindow(const std::shared_ptr<Wi
     for (const auto& pair : windows_)
     {
         const auto& other = pair.second;
+        if (other->GetId() == window->GetId()) continue;
 
-        if (other->GetId() == window->GetId())
-        {
-            continue;
-        }
-
-        if ((
-            other->GetWindowHandle() == window->GetParentHandle() ||
-            other->GetWindowHandle() == window->GetOwnerHandle()
-        ) ||
-        (
-            ((other->GetParentId()  == -1 || other->IsAltTab()) &&
-            other->GetProcessId() == window->GetProcessId() &&
-            other->GetThreadId()  == window->GetThreadId())
-        ))
+        if ((other->GetWindowHandle() == window->GetParentHandle() ||
+             other->GetWindowHandle() == window->GetOwnerHandle()) ||
+            (((other->GetParentId()  == -1 || other->IsAltTab()) &&
+             other->GetProcessId() == window->GetProcessId() &&
+             other->GetThreadId()  == window->GetThreadId())))
         {
             const int zOrder      = other->GetZOrder();
             const int deltaZOrder = zOrder - selfZOrder;
@@ -210,53 +157,37 @@ std::shared_ptr<Window> WindowManager::FindParentWindow(const std::shared_ptr<Wi
             }
         }
     }
-
     return parent;
 }
 
 std::shared_ptr<Window> WindowManager::FindOrAddWindow(const Window::Data1 &data)
 {
     std::scoped_lock lock(windowsListMutex_);
+    const auto it = std::find_if(windows_.begin(), windows_.end(), [&](const auto& pair) {
+        const auto& window = pair.second;
+        return data.isDesktop ?
+            (window->IsDesktop() && window->GetMonitorHandle() == data.hMonitor) :
+            (window->GetWindowHandle() == data.hWnd);
+    });
 
-    const auto it = std::find_if(
-        windows_.begin(),
-        windows_.end(),
-        [&](const auto& pair)
-        {
-            const auto& window = pair.second;
-            return data.isDesktop ?
-                (window->IsDesktop() && window->GetMonitorHandle() == data.hMonitor) :
-                (window->GetWindowHandle() == data.hWnd);
-        });
-
-    if (it != windows_.end())
-    {
-        return it->second;
-    }
+    if (it != windows_.end()) return it->second;
 
     const auto id = lastWindowId_++;
     auto window   = std::make_shared<Window>(id, data);
     windows_.emplace(id, window);
-
     return window;
 }
 
 void WindowManager::UpdateWindows()
 {
     UWC_SCOPE_TIMER(UpdateWindows);
-
     {
         std::scoped_lock lock(windowsListMutex_);
-
-        for (const auto& pair : windows_)
-        {
-            pair.second->isAlive_ = false;
-        }
+        for (const auto& pair : windows_) pair.second->isAlive_ = false;
     }
 
     {
         std::lock_guard<std::mutex> lock(windowsDataListMutex_);
-
         for (auto&& data1 : windowDataList_[0])
         {
             auto window = FindOrAddWindow(data1);
@@ -293,10 +224,7 @@ void WindowManager::UpdateWindows()
                         data2.className               = "";
                     }
 
-                    if (auto p = FindParentWindow(window))
-                    {
-                        window->parentId_ = p->GetId();
-                    }
+                    if (auto p = FindParentWindow(window)) window->parentId_ = p->GetId();
 
                     window->InitTexture();
                     window->UpdateTitle();
@@ -320,7 +248,6 @@ void WindowManager::UpdateWindows()
 
     {
         std::scoped_lock lock(windowsListMutex_);
-
         for (auto it = windows_.begin(); it != windows_.end();)
         {
             const auto id    = it->first;
@@ -345,10 +272,7 @@ void WindowManager::UpdateWindowHandleList()
 
     static const auto _EnumWindowsCallback = [](HWND hWnd, LPARAM lParam) -> BOOL
     {
-        if (!::IsWindow(hWnd) || !::IsWindowVisible(hWnd) || ::IsHungAppWindow(hWnd))
-        {
-            return TRUE;
-        }
+        if (!::IsWindow(hWnd) || !::IsWindowVisible(hWnd) || ::IsHungAppWindow(hWnd)) return TRUE;
 
         Window::Data1 data;
         data.hWnd    = hWnd;
@@ -361,21 +285,16 @@ void WindowManager::UpdateWindowHandleList()
 
         auto thiz = reinterpret_cast<WindowManager*>(lParam);
         thiz->windowDataList_[1].push_back(data);
-
         return TRUE;
     };
 
     using EnumWindowsCallbackType = BOOL(CALLBACK *)(HWND, LPARAM);
     static const auto EnumWindowsCallback = static_cast<EnumWindowsCallbackType>(_EnumWindowsCallback);
-    if (!::EnumWindows(EnumWindowsCallback, reinterpret_cast<LPARAM>(this)))
-    {
-        OutputApiError(__FUNCTION__, "EnumWindows");
-    }
+    if (!::EnumWindows(EnumWindowsCallback, reinterpret_cast<LPARAM>(this))) OutputApiError(__FUNCTION__, "EnumWindows");
 
     static const auto _EnumDisplayMonitorsCallback = [](HMONITOR hMonitor, HDC hDc, LPRECT lpRect, LPARAM lParam) -> BOOL
     {
         const auto hWnd = GetDesktopWindow();
-
         Window::Data1 data;
         data.hWnd      = hWnd;
         data.hOwner    = NULL;
@@ -387,26 +306,16 @@ void WindowManager::UpdateWindowHandleList()
 
         auto thiz = reinterpret_cast<WindowManager*>(lParam);
         thiz->windowDataList_[1].push_back(data);
-
         return TRUE;
     };
 
     using EnumDisplayMonitorsCallbackType = BOOL(CALLBACK *)(HMONITOR, HDC, LPRECT, LPARAM);
     static const auto EnumDisplayMonitorsCallback = static_cast<EnumDisplayMonitorsCallbackType>(_EnumDisplayMonitorsCallback);
-    if (!::EnumDisplayMonitors(NULL, NULL, EnumDisplayMonitorsCallback, reinterpret_cast<LPARAM>(this)))
-    {
-        OutputApiError(__FUNCTION__, "EnumDisplayMonitors");
-    }
+    if (!::EnumDisplayMonitors(NULL, NULL, EnumDisplayMonitorsCallback, reinterpret_cast<LPARAM>(this))) OutputApiError(__FUNCTION__, "EnumDisplayMonitors");
 
-    std::sort(
-        windowDataList_[1].begin(),
-        windowDataList_[1].end(),
-        [](const auto& a, const auto& b)
-        {
-            return
-                a.hOwner == nullptr &&
-                b.hOwner != nullptr;
-        });
+    std::sort(windowDataList_[1].begin(), windowDataList_[1].end(), [](const auto& a, const auto& b) {
+        return a.hOwner == nullptr && b.hOwner != nullptr;
+    });
 
     {
         std::lock_guard<std::mutex> lock(windowsDataListMutex_);
@@ -415,18 +324,11 @@ void WindowManager::UpdateWindowHandleList()
     windowDataList_[1].clear();
 
     POINT cursorPos;
-    if (::GetCursorPos(&cursorPos))
-    {
-        cursorWindow_ = GetWindowFromPoint(cursorPos);
-    }
+    if (::GetCursorPos(&cursorPos)) cursorWindow_ = GetWindowFromPoint(cursorPos);
 }
 
 void WindowManager::RenderWindows()
 {
     std::scoped_lock lock(windowsListMutex_);
-
-    for (auto&& pair : windows_)
-    {
-        pair.second->Render();
-    }
+    for (auto&& pair : windows_) pair.second->Render();
 }

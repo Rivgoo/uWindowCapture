@@ -13,6 +13,9 @@
     <Filter Include="Capture">
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Interop">
+      <UniqueIdentifier>{8A2B3C4D-5E6F-7A8B-9C0D-1E2F3A4B5C6D}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Unity\IUnityInterface.h"><Filter>Unity</Filter></ClInclude>
@@ -20,6 +23,7 @@
     <ClInclude Include="Unity\IUnityGraphicsD3D11.h"><Filter>Unity</Filter></ClInclude>
     <ClInclude Include="Unity\IUnityGraphicsD3D12.h"><Filter>Unity</Filter></ClInclude>
     <ClInclude Include="Core\Buffer.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="Core\ComApartment.h"><Filter>Core</Filter></ClInclude>
     <ClInclude Include="Core\Debug.h"><Filter>Core</Filter></ClInclude>
     <ClInclude Include="Core\Message.h"><Filter>Core</Filter></ClInclude>
     <ClInclude Include="Core\Singleton.h"><Filter>Core</Filter></ClInclude>
@@ -27,14 +31,15 @@
     <ClInclude Include="Core\Unity.h"><Filter>Core</Filter></ClInclude>
     <ClInclude Include="Core\Util.h"><Filter>Core</Filter></ClInclude>
     <ClInclude Include="Core\WindowQueue.h"><Filter>Core</Filter></ClInclude>
-    <ClInclude Include="Graphics\IGraphicsContext.h"><Filter>Graphics</Filter></ClInclude>
+    <Identity Include="Graphics\IGraphicsContext.h"><Filter>Graphics</Filter></Identity>
     <ClInclude Include="Graphics\GraphicsManager.h"><Filter>Graphics</Filter></ClInclude>
     <ClInclude Include="Graphics\D3D11Context.h"><Filter>Graphics</Filter></ClInclude>
     <ClInclude Include="Graphics\D3D12Context.h"><Filter>Graphics</Filter></ClInclude>
+    <ClInclude Include="Interop\SharedTextureResource.h"><Filter>Interop</Filter></ClInclude>
+    <ClInclude Include="Capture\IsolatedCaptureDevice.h"><Filter>Capture</Filter></ClInclude>
     <ClInclude Include="Capture\CaptureManager.h"><Filter>Capture</Filter></ClInclude>
     <ClInclude Include="Capture\Cursor.h"><Filter>Capture</Filter></ClInclude>
     <ClInclude Include="Capture\IconTexture.h"><Filter>Capture</Filter></ClInclude>
-    <ClInclude Include="Capture\UploadManager.h"><Filter>Capture</Filter></ClInclude>
     <ClInclude Include="Capture\Window.h"><Filter>Capture</Filter></ClInclude>
     <ClInclude Include="Capture\WindowManager.h"><Filter>Capture</Filter></ClInclude>
     <ClInclude Include="Capture\WindowTexture.h"><Filter>Capture</Filter></ClInclude>
@@ -51,10 +56,11 @@
     <ClCompile Include="Graphics\GraphicsManager.cpp"><Filter>Graphics</Filter></ClCompile>
     <ClCompile Include="Graphics\D3D11Context.cpp"><Filter>Graphics</Filter></ClCompile>
     <ClCompile Include="Graphics\D3D12Context.cpp"><Filter>Graphics</Filter></ClCompile>
+    <ClCompile Include="Interop\SharedTextureResource.cpp"><Filter>Interop</Filter></ClCompile>
+    <ClCompile Include="Capture\IsolatedCaptureDevice.cpp"><Filter>Capture</Filter></ClCompile>
     <ClCompile Include="Capture\CaptureManager.cpp"><Filter>Capture</Filter></ClCompile>
     <ClCompile Include="Capture\Cursor.cpp"><Filter>Capture</Filter></ClCompile>
     <ClCompile Include="Capture\IconTexture.cpp"><Filter>Capture</Filter></ClCompile>
-    <ClCompile Include="Capture\UploadManager.cpp"><Filter>Capture</Filter></ClCompile>
     <ClCompile Include="Capture\Window.cpp"><Filter>Capture</Filter></ClCompile>
     <ClCompile Include="Capture\WindowManager.cpp"><Filter>Capture</Filter></ClCompile>
     <ClCompile Include="Capture\WindowTexture.cpp"><Filter>Capture</Filter></ClCompile>

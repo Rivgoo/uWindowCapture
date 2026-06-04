@@ -39,4 +39,3 @@
 
 #define UWC_SINGLETON_INSTANCE(ClassName) \
     ClassName* ClassName::instance = nullptr;
-

@@ -1,14 +1,9 @@
-#include <d3d11.h>
-#include <dxgi1_2.h>
-#include <Windows.h>
-#include <memory>
-
 #include "../Unity/IUnityInterface.h"
 #include "../Unity/IUnityGraphics.h"
-
 #include "Debug.h"
+#include "ComApartment.h"
 #include "Message.h"
-#include "../Capture/UploadManager.h"
+#include "../Graphics/GraphicsManager.h"
 #include "../Capture/CaptureManager.h"
 #include "../Capture/Window.h"
 #include "../Capture/Cursor.h"
@@ -20,20 +15,16 @@
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "Dwmapi.lib")
 
+using namespace uWindowCapture;
 
-// flag to check if this plugin has initialized.
 bool g_hasInitialized = false;
-
-// unity interafece to access ID3D11Device.
 IUnityInterfaces* g_unity = nullptr;
-
 
 std::shared_ptr<Window> GetWindow(int id)
 {
     if (WindowManager::IsNull()) return nullptr;
     return WindowManager::Get().GetWindow(id);
 }
-
 
 extern "C"
 {
@@ -42,10 +33,16 @@ extern "C"
         if (g_hasInitialized) return;
         g_hasInitialized = true;
 
+        static ScopedComApartment unityMainThreadCom;
+
         Debug::Initialize();
-
         MessageManager::Create();
+        
+        CaptureManager::Create();
+        CaptureManager::Get().Initialize();
 
+        GraphicsManager::Create();
+        
         WindowManager::Create();
         WindowManager::Get().Initialize();
     }
@@ -58,8 +55,13 @@ extern "C"
         WindowManager::Get().Finalize();
         WindowManager::Destroy();
 
-        MessageManager::Destroy();
+        GraphicsManager::Get().Finalize();
+        GraphicsManager::Destroy();
 
+        CaptureManager::Get().Finalize();
+        CaptureManager::Destroy();
+
+        MessageManager::Destroy();
         Debug::Finalize();
     }
 
@@ -70,6 +72,7 @@ extern "C"
         case kUnityGfxDeviceEventInitialize:
         {
             UwcInitialize();
+            GraphicsManager::Get().Initialize(g_unity);
             break;
         }
         case kUnityGfxDeviceEventShutdown:
@@ -113,6 +116,12 @@ extern "C"
     {
         if (WindowManager::IsNull()) return;
         WindowManager::Get().Render();
+        
+        if (!GraphicsManager::IsNull()) {
+            if (auto context = GraphicsManager::Get().GetContext()) {
+                context->RenderEvent(id);
+            }
+        }
     }
 
     UNITY_INTERFACE_EXPORT UnityRenderingEvent UNITY_INTERFACE_API UwcGetRenderEventFunc()
@@ -158,440 +167,296 @@ extern "C"
 
     UNITY_INTERFACE_EXPORT int UNITY_INTERFACE_API UwcGetWindowParentId(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetParentId();
-        }
+        if (auto window = GetWindow(id)) return window->GetParentId();
         return -1;
     }
 
     UNITY_INTERFACE_EXPORT HWND UNITY_INTERFACE_API UwcGetWindowHandle(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetWindowHandle();
-        }
+        if (auto window = GetWindow(id)) return window->GetWindowHandle();
         return nullptr;
     }
 
     UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API UwcRequestUpdateWindowTitle(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->RequestUpdateTitle();
-        }
+        if (auto window = GetWindow(id)) window->RequestUpdateTitle();
     }
 
     UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API UwcRequestCaptureWindow(int id, CapturePriority priority)
     {
-        if (WindowManager::IsNull()) return;
-        WindowManager::GetCaptureManager()->RequestCapture(id, priority);
+        if (CaptureManager::IsNull()) return;
+        CaptureManager::Get().RequestCapture(id, priority);
     }
 
     UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API UwcRequestCaptureIcon(int id)
     {
-        if (WindowManager::IsNull()) return;
-        WindowManager::GetCaptureManager()->RequestCaptureIcon(id);
+        if (CaptureManager::IsNull()) return;
+        CaptureManager::Get().RequestCaptureIcon(id);
     }
 
     UNITY_INTERFACE_EXPORT HWND UNITY_INTERFACE_API UwcGetWindowOwnerHandle(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetOwnerHandle();
-        }
+        if (auto window = GetWindow(id)) return window->GetOwnerHandle();
         return nullptr;
     }
 
     UNITY_INTERFACE_EXPORT HWND UNITY_INTERFACE_API UwcGetWindowParentHandle(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetParentHandle();
-        }
+        if (auto window = GetWindow(id)) return window->GetParentHandle();
         return nullptr;
     }
 
     UNITY_INTERFACE_EXPORT HINSTANCE UNITY_INTERFACE_API UwcGetWindowInstance(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetInstance();
-        }
+        if (auto window = GetWindow(id)) return window->GetInstance();
         return nullptr;
     }
 
     UNITY_INTERFACE_EXPORT DWORD UNITY_INTERFACE_API UwcGetWindowProcessId(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetProcessId();
-        }
+        if (auto window = GetWindow(id)) return window->GetProcessId();
         return -1;
     }
 
     UNITY_INTERFACE_EXPORT DWORD UNITY_INTERFACE_API UwcGetWindowThreadId(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetThreadId();
-        }
+        if (auto window = GetWindow(id)) return window->GetThreadId();
         return -1;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowX(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetX();
-        }
+        if (auto window = GetWindow(id)) return window->GetX();
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowY(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetY();
-        }
+        if (auto window = GetWindow(id)) return window->GetY();
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowWidth(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetWidth();
-        }
+        if (auto window = GetWindow(id)) return window->GetWidth();
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowHeight(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetHeight();
-        }
+        if (auto window = GetWindow(id)) return window->GetHeight();
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowZOrder(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetZOrder();
-        }
+        if (auto window = GetWindow(id)) return window->GetZOrder();
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT BYTE* UNITY_INTERFACE_API UwcGetWindowBuffer(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetBuffer();
-        }
+        if (auto window = GetWindow(id)) return window->GetBuffer();
         return nullptr;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowTextureWidth(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetTextureWidth();
-        }
+        if (auto window = GetWindow(id)) return window->GetTextureWidth();
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowTextureHeight(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetTextureHeight();
-        }
+        if (auto window = GetWindow(id)) return window->GetTextureHeight();
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowTextureOffsetX(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetTextureOffsetX();
-        }
+        if (auto window = GetWindow(id)) return window->GetTextureOffsetX();
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowTextureOffsetY(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetTextureOffsetY();
-        }
+        if (auto window = GetWindow(id)) return window->GetTextureOffsetY();
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowIconWidth(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetIconWidth();
-        }
+        if (auto window = GetWindow(id)) return window->GetIconWidth();
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowIconHeight(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetIconHeight();
-        }
+        if (auto window = GetWindow(id)) return window->GetIconHeight();
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowTitleLength(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return static_cast<UINT>(window->GetTitle().length());
-        }
+        if (auto window = GetWindow(id)) return static_cast<UINT>(window->GetTitle().length());
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT const WCHAR* UNITY_INTERFACE_API UwcGetWindowTitle(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetTitle().c_str();
-        }
+        if (auto window = GetWindow(id)) return window->GetTitle().c_str();
         return nullptr;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowClassNameLength(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return static_cast<UINT>(window->GetClass().length());
-        }
+        if (auto window = GetWindow(id)) return static_cast<UINT>(window->GetClass().length());
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT const CHAR* UNITY_INTERFACE_API UwcGetWindowClassName(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetClass().c_str();
-        }
+        if (auto window = GetWindow(id)) return window->GetClass().c_str();
         return nullptr;
     }
 
-    UNITY_INTERFACE_EXPORT ID3D11Texture2D* UNITY_INTERFACE_API UwcGetWindowTexturePtr(int id)
+    UNITY_INTERFACE_EXPORT void* UNITY_INTERFACE_API UwcGetWindowTexturePtr(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetWindowTexture();
-        }
+        if (auto window = GetWindow(id)) return window->GetWindowTexture();
         return nullptr;
     }
 
-    UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API UwcSetWindowTexturePtr(int id, ID3D11Texture2D* ptr)
+    UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API UwcSetWindowTexturePtr(int id, void* ptr)
     {
-        if (auto window = GetWindow(id))
-        {
-            window->SetWindowTexture(ptr);
-        }
+        if (auto window = GetWindow(id)) window->SetWindowTexture(static_cast<ID3D11Texture2D*>(ptr));
     }
 
-    UNITY_INTERFACE_EXPORT ID3D11Texture2D* UNITY_INTERFACE_API UwcGetWindowIconTexturePtr(int id)
+    UNITY_INTERFACE_EXPORT void* UNITY_INTERFACE_API UwcGetWindowIconTexturePtr(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetIconTexture();
-        }
+        if (auto window = GetWindow(id)) return window->GetIconTexture();
         return nullptr;
     }
 
-    UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API UwcSetWindowIconTexturePtr(int id, ID3D11Texture2D* ptr)
+    UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API UwcSetWindowIconTexturePtr(int id, void* ptr)
     {
-        if (auto window = GetWindow(id))
-        {
-            window->SetIconTexture(ptr);
-        }
+        if (auto window = GetWindow(id)) window->SetIconTexture(static_cast<ID3D11Texture2D*>(ptr));
     }
 
     UNITY_INTERFACE_EXPORT CaptureMode UNITY_INTERFACE_API UwcGetWindowCaptureMode(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetCaptureMode();
-        }
+        if (auto window = GetWindow(id)) return window->GetCaptureMode();
         return CaptureMode::None;
     }
 
     UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API UwcSetWindowCaptureMode(int id, CaptureMode mode)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->SetCaptureMode(mode);
-        }
+        if (auto window = GetWindow(id)) window->SetCaptureMode(mode);
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcGetWindowCursorDraw(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetCursorDraw();
-        }
+        if (auto window = GetWindow(id)) return window->GetCursorDraw();
         return false;
     }
 
     UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API UwcSetWindowCursorDraw(int id, bool draw)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->SetCursorDraw(draw);
-        }
+        if (auto window = GetWindow(id)) window->SetCursorDraw(draw);
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsWindow(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->IsWindow() > 0;
-        }
+        if (auto window = GetWindow(id)) return window->IsWindow() > 0;
         return false;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsAltTabWindow(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->IsAltTab();
-        }
+        if (auto window = GetWindow(id)) return window->IsAltTab();
         return false;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsDesktop(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->IsDesktop();
-        }
+        if (auto window = GetWindow(id)) return window->IsDesktop();
         return false;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsWindowVisible(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->IsVisible() > 0;
-        }
+        if (auto window = GetWindow(id)) return window->IsVisible() > 0;
         return false;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsWindowEnabled(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->IsEnabled() > 0;
-        }
+        if (auto window = GetWindow(id)) return window->IsEnabled() > 0;
         return false;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsWindowUnicode(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->IsUnicode() > 0;
-        }
+        if (auto window = GetWindow(id)) return window->IsUnicode() > 0;
         return false;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsWindowZoomed(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->IsZoomed() > 0;
-        }
+        if (auto window = GetWindow(id)) return window->IsZoomed() > 0;
         return false;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsWindowIconic(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->IsIconic() > 0;
-        }
+        if (auto window = GetWindow(id)) return window->IsIconic() > 0;
         return false;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsWindowHungUp(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->IsHungUp() > 0;
-        }
+        if (auto window = GetWindow(id)) return window->IsHungUp() > 0;
         return false;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsWindowTouchable(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->IsTouchable() > 0;
-        }
+        if (auto window = GetWindow(id)) return window->IsTouchable() > 0;
         return false;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsWindowApplicationFrameWindow(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->IsApplicationFrameWindow() > 0;
-        }
+        if (auto window = GetWindow(id)) return window->IsApplicationFrameWindow() > 0;
         return false;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsWindowUWP(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return IsUWP(window->GetProcessId());
-        }
+        if (auto window = GetWindow(id)) return IsUWP(window->GetProcessId());
         return false;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsWindowBackground(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->IsBackground() > 0;
-        }
+        if (auto window = GetWindow(id)) return window->IsBackground() > 0;
         return false;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcIsWindowsGraphicsCaptureAvailable(int id)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->IsWindowsGraphicsCaptureAvailable();
-        }
+        if (auto window = GetWindow(id)) return window->IsWindowsGraphicsCaptureAvailable();
         return false;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetWindowPixel(int id, int x, int y)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetPixel(x, y);
-        }
+        if (auto window = GetWindow(id)) return window->GetPixel(x, y);
         return 0;
     }
 
     UNITY_INTERFACE_EXPORT bool UNITY_INTERFACE_API UwcGetWindowPixels(int id, BYTE* output, int x, int y, int width, int height)
     {
-        if (auto window = GetWindow(id))
-        {
-            return window->GetPixels(output, x, y, width, height);
-        }
+        if (auto window = GetWindow(id)) return window->GetPixels(output, x, y, width, height);
         return false;
     }
 
@@ -605,80 +470,55 @@ extern "C"
     UNITY_INTERFACE_EXPORT int UNITY_INTERFACE_API UwcGetWindowIdFromPoint(int x, int y)
     {
         if (WindowManager::IsNull()) return -1;
-        if (auto window = WindowManager::Get().GetWindowFromPoint({ x, y }))
-        {
-            return window->GetId();
-        }
+        if (auto window = WindowManager::Get().GetWindowFromPoint({ x, y })) return window->GetId();
         return -1;
     }
 
     UNITY_INTERFACE_EXPORT int UNITY_INTERFACE_API UwcGetWindowIdUnderCursor()
     {
         if (WindowManager::IsNull()) return -1;
-        if (auto window = WindowManager::Get().GetCursorWindow())
-        {
-            return window->GetId();
-        }
+        if (auto window = WindowManager::Get().GetCursorWindow()) return window->GetId();
         return -1;
     }
 
     UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API UwcRequestCaptureCursor()
     {
         if (WindowManager::IsNull()) return;
-        if (auto& cursor = WindowManager::Get().GetCursor())
-        {
-            return cursor->RequestCapture();
-        }
+        if (auto& cursor = WindowManager::Get().GetCursor()) cursor->RequestCapture();
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetCursorX()
     {
         if (WindowManager::IsNull()) return -1;
-        if (auto& cursor = WindowManager::Get().GetCursor())
-        {
-            return cursor->GetX();
-        }
+        if (auto& cursor = WindowManager::Get().GetCursor()) return cursor->GetX();
         return -1;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetCursorY()
     {
         if (WindowManager::IsNull()) return -1;
-        if (auto& cursor = WindowManager::Get().GetCursor())
-        {
-            return cursor->GetY();
-        }
+        if (auto& cursor = WindowManager::Get().GetCursor()) return cursor->GetY();
         return -1;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetCursorWidth()
     {
         if (WindowManager::IsNull()) return -1;
-        if (auto& cursor = WindowManager::Get().GetCursor())
-        {
-            return cursor->GetWidth();
-        }
+        if (auto& cursor = WindowManager::Get().GetCursor()) return cursor->GetWidth();
         return -1;
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetCursorHeight()
     {
         if (WindowManager::IsNull()) return -1;
-        if (auto& cursor = WindowManager::Get().GetCursor())
-        {
-            return cursor->GetHeight();
-        }
+        if (auto& cursor = WindowManager::Get().GetCursor()) return cursor->GetHeight();
         return -1;
     }
 
-    UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API UwcSetCursorTexturePtr(ID3D11Texture2D* ptr)
+    UNITY_INTERFACE_EXPORT void UNITY_INTERFACE_API UwcSetCursorTexturePtr(void* ptr)
     {
         if (WindowManager::IsNull()) return;
-        if (auto& cursor = WindowManager::Get().GetCursor())
-        {
-            cursor->SetUnityTexturePtr(ptr);
-        }
-        return;
+        if (auto& cursor = WindowManager::Get().GetCursor()) cursor->SetUnityTexturePtr(static_cast<ID3D11Texture2D*>(ptr));
     }
 
     UNITY_INTERFACE_EXPORT UINT UNITY_INTERFACE_API UwcGetScreenX()

@@ -9,8 +9,6 @@
 
 #include "../Core/Singleton.h"
 #include "../Core/Thread.h"
-#include "CaptureManager.h"
-#include "UploadManager.h"
 #include "WindowsGraphicsCapture.h"
 #include "Window.h"
 #include "Cursor.h"
@@ -30,8 +28,6 @@ public:
     std::shared_ptr<Window> GetWindowFromPoint(POINT point) const;
     std::shared_ptr<Window> GetCursorWindow() const;
 
-    static const std::unique_ptr<CaptureManager>& GetCaptureManager();
-    static const std::unique_ptr<UploadManager>& GetUploadManager();
     static const std::unique_ptr<WindowsGraphicsCaptureManager>& GetWindowsGraphicsCaptureManager();
     static const std::unique_ptr<Cursor>& GetCursor();
 
@@ -45,8 +41,6 @@ private:
     void UpdateWindows();
     void RenderWindows();
 
-    std::unique_ptr<CaptureManager> captureManager_;
-    std::unique_ptr<UploadManager> uploadManager_;
     std::unique_ptr<WindowsGraphicsCaptureManager> windowsGraphicsCaptureManager_;
     std::unique_ptr<Cursor> cursor_;
 
@@ -60,4 +54,3 @@ private:
     std::vector<Window::Data1> windowDataList_[2];
     mutable std::mutex windowsDataListMutex_;
 };
-

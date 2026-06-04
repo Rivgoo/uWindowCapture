@@ -1,102 +1,117 @@
 #include "D3D12Context.h"
-#include "../Core/Unity.h"
-#include "../Unity/IUnityGraphicsD3D12.h"
+#include "../Interop/SharedTextureResource.h"
 #include "../Core/Debug.h"
 
-#pragma comment(lib, "d3d11.lib")
+namespace uWindowCapture {
 
-bool D3D12Context::Initialize() {
-    auto d3d12 = GetUnity()->Get<IUnityGraphicsD3D12v5>();
-    if (!d3d12) {
-        Debug::Error("D3D12Context: IUnityGraphicsD3D12v5 interface not found.");
-        return false;
-    }
-    
-    d3d12Device_ = d3d12->GetDevice();
-    IUnknown* queues[] = { d3d12->GetCommandQueue() };
-    
-    UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-    HRESULT hr = D3D11On12CreateDevice(d3d12Device_.Get(), flags, nullptr, 0, queues, 1, 0, &d3d11Device_, &d3d11Context_, nullptr);
-    if (FAILED(hr)) {
-        Debug::Error("D3D12Context: D3D11On12CreateDevice failed with HRESULT: ", hr);
-        return false;
-    }
-    
-    hr = d3d11Device_.As(&d3d11On12Device_);
-    if (FAILED(hr)) {
-        Debug::Error("D3D12Context: Failed to cast to ID3D11On12Device.");
-        return false;
-    }
-    
+bool D3D12Context::Initialize(IUnityInterfaces* unityInterfaces) {
+    d3d12Unity_ = unityInterfaces->Get<IUnityGraphicsD3D12v5>();
+    if (!d3d12Unity_) return false;
+
+    device_ = d3d12Unity_->GetDevice();
+    if (!device_) return false;
+
+    if (!CreateCommandObjects()) return false;
+
+    return true;
+}
+
+bool D3D12Context::CreateCommandObjects() {
+    HRESULT hr = device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator_));
+    if (FAILED(hr)) return false;
+
+    hr = device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator_.Get(), nullptr, IID_PPV_ARGS(&commandList_));
+    if (FAILED(hr)) return false;
+
+    commandList_->Close(); // Close initially
     return true;
 }
 
 void D3D12Context::Finalize() {
     std::lock_guard<std::mutex> lock(mutex_);
-    wrappedResources_.clear();
-    d3d11On12Device_.Reset();
-    d3d11Context_.Reset();
-    d3d11Device_.Reset();
-    d3d12Device_.Reset();
+    resources_.clear();
+    commandList_.Reset();
+    commandAllocator_.Reset();
+    device_.Reset();
 }
 
-Microsoft::WRL::ComPtr<ID3D11Texture2D> D3D12Context::CreateTexture(int width, int height) {
-    D3D11_TEXTURE2D_DESC desc{};
-    desc.Width = width;
-    desc.Height = height;
-    desc.MipLevels = 1;
-    desc.ArraySize = 1;
-    desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    desc.SampleDesc.Count = 1;
-    desc.Usage = D3D11_USAGE_DEFAULT;
-    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+void D3D12Context::RegisterSharedResource(void* unityTexturePtr, SharedTextureResource* sharedResource) {
+    if (!unityTexturePtr || !sharedResource) return;
 
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> tex;
-    HRESULT hr = d3d11Device_->CreateTexture2D(&desc, nullptr, &tex);
-    if (FAILED(hr)) {
-        Debug::Error("D3D12Context: Failed to create capture texture.");
-        return nullptr;
-    }
-    return tex;
-}
-
-void D3D12Context::UpdateUnityTexture(void* unityTexturePtr, ID3D11Texture2D* source) {
-    if (!unityTexturePtr || !source) return;
-    
     std::lock_guard<std::mutex> lock(mutex_);
-    ID3D11Resource* wrappedRes = nullptr;
-    
-    auto it = wrappedResources_.find(unityTexturePtr);
-    if (it != wrappedResources_.end()) {
-        wrappedRes = it->second.Get();
-    } else {
-        D3D11_RESOURCE_FLAGS flags{};
-        flags.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-        
-        HRESULT hr = d3d11On12Device_->CreateWrappedResource(
-            (IUnknown*)unityTexturePtr,
-            &flags,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            IID_PPV_ARGS(&wrappedRes)
-        );
-        
-        if (SUCCEEDED(hr)) {
-            wrappedResources_[unityTexturePtr] = wrappedRes;
-        } else {
-            Debug::Error("D3D12Context: CreateWrappedResource failed with HRESULT: ", hr);
-            return;
+    ResourceMap map{};
+    map.source = sharedResource;
+
+    device_->OpenSharedHandle(sharedResource->GetSharedTextureHandle(), IID_PPV_ARGS(&map.openedTexture));
+    device_->OpenSharedHandle(sharedResource->GetSharedFenceHandle(), IID_PPV_ARGS(&map.openedFence));
+
+    resources_[unityTexturePtr] = map;
+}
+
+void D3D12Context::UnregisterSharedResource(void* unityTexturePtr) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    resources_.erase(unityTexturePtr);
+}
+
+void D3D12Context::RenderEvent(int eventId) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!d3d12Unity_ || resources_.empty()) return;
+
+    ID3D12CommandQueue* queue = d3d12Unity_->GetCommandQueue();
+    if (!queue) return;
+
+    bool needsExecute = false;
+    commandAllocator_->Reset();
+    commandList_->Reset(commandAllocator_.Get(), nullptr);
+
+    for (auto& pair : resources_) {
+        auto unityRes = static_cast<ID3D12Resource*>(pair.first);
+        auto& map = pair.second;
+
+        if (map.openedTexture && map.openedFence) {
+            uint64_t targetFence = map.source->GetCurrentFenceValue();
+            if (targetFence > map.lastProcessedFenceValue) {
+                // 1. Wait for Producer (D3D11)
+                queue->Wait(map.openedFence.Get(), targetFence);
+
+                // 2. Set Barriers
+                D3D12_RESOURCE_BARRIER barriers[2] = {};
+                barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                barriers[0].Transition.pResource = unityRes;
+                barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+                barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+
+                barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                barriers[1].Transition.pResource = map.openedTexture.Get();
+                barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+                barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+
+                commandList_->ResourceBarrier(2, barriers);
+
+                // 3. Copy
+                commandList_->CopyResource(unityRes, map.openedTexture.Get());
+
+                // 4. Revert Barriers
+                barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+                barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+                barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+                barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON;
+
+                commandList_->ResourceBarrier(2, barriers);
+
+                map.lastProcessedFenceValue = targetFence;
+                needsExecute = true;
+            }
         }
     }
 
-    d3d11On12Device_->AcquireWrappedResources(&wrappedRes, 1);
-    d3d11Context_->CopyResource(wrappedRes, source);
-    d3d11On12Device_->ReleaseWrappedResources(&wrappedRes, 1);
-    d3d11Context_->Flush();
+    commandList_->Close();
+
+    if (needsExecute) {
+        ID3D12CommandList* ppCommandLists[] = { commandList_.Get() };
+        queue->ExecuteCommandLists(1, ppCommandLists);
+    }
 }
 
-void D3D12Context::ReleaseUnityTexture(void* unityTexturePtr) {
-    if (!unityTexturePtr) return;
-    std::lock_guard<std::mutex> lock(mutex_);
-    wrappedResources_.erase(unityTexturePtr);
-}
+} 

@@ -3,10 +3,12 @@
 #include "IGraphicsContext.h"
 #include <memory>
 
+namespace uWindowCapture {
+
 class GraphicsManager {
     UWC_SINGLETON(GraphicsManager)
 public:
-    void Initialize(int apiType); // 1 = D3D11, 2 = D3D12
+    void Initialize(IUnityInterfaces* unityInterfaces);
     void Finalize();
     
     IGraphicsContext* GetContext() const;
@@ -15,3 +17,5 @@ public:
 private:
     std::unique_ptr<IGraphicsContext> context_;
 };
+
+} 

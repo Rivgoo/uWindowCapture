@@ -1,441 +1,329 @@
-﻿using UnityEngine;
-using System.Collections.Generic;
+using UnityEngine;
 
 namespace uWindowCapture
 {
+	// FIX: Removed [RequireComponent(typeof(Renderer))] so this component can be used as a headless proxy for UI.
+	public class UwcWindowTexture : MonoBehaviour
+	{
+		private bool shouldUpdateWindow_ = true;
+		private bool shouldUpdateWindow
+		{
+			get { return shouldUpdateWindow_; }
+			set
+			{
+				if (value && searchTiming == WindowSearchTiming.Manual) return;
+				shouldUpdateWindow_ = value;
+			}
+		}
 
-public class UwcWindowTexture : MonoBehaviour
-{
-    bool shouldUpdateWindow_ = true;
-    bool shouldUpdateWindow 
-    {
-        get
-        {
-            return shouldUpdateWindow_;
-        }
-        set
-        {
-            if (value && searchTiming == WindowSearchTiming.Manual) return;
-            shouldUpdateWindow_ = value;
-        }
-    }
+		public WindowSearchTiming searchTiming = WindowSearchTiming.OnlyWhenParameterChanged;
 
-    [SerializeField]
-    WindowSearchTiming searchTiming_ = WindowSearchTiming.OnlyWhenParameterChanged;
-    public WindowSearchTiming searchTiming
-    {
-        get
-        {
-            return searchTiming_;
-        }
-        set
-        {
-            searchTiming_ = value;
-            if (searchTiming_ == WindowSearchTiming.Manual) {
-                shouldUpdateWindow = false;
-            } else {
-                shouldUpdateWindow = true;
-            }
-        }
-    }
+		[SerializeField] private WindowTextureType type_ = WindowTextureType.Window;
+		public WindowTextureType type
+		{
+			get { return type_; }
+			set { shouldUpdateWindow = true; type_ = value; }
+		}
 
-    [SerializeField]
-    WindowTextureType type_ = WindowTextureType.Window;
-    public WindowTextureType type
-    {
-        get
-        {
-            return type_;
-        }
-        set
-        {
-            shouldUpdateWindow = true;
-            type_ = value;
-        }
-    }
+		[SerializeField] private bool altTabWindow_ = false;
+		public bool altTabWindow
+		{
+			get { return altTabWindow_; }
+			set { shouldUpdateWindow = true; altTabWindow_ = value; }
+		}
 
-    [SerializeField]
-    bool altTabWindow_ = false;
-    public bool altTabWindow
-    {
-        get 
-        { 
-            return altTabWindow_; 
-        }
-        set
-        {
-            shouldUpdateWindow = true;
-            altTabWindow_ = value;
-        }
-    }
+		[SerializeField] private string partialWindowTitle_;
+		public string partialWindowTitle
+		{
+			get { return partialWindowTitle_; }
+			set { shouldUpdateWindow = true; partialWindowTitle_ = value; }
+		}
 
-    [SerializeField]
-    bool createChildWindows_ = true;
-    public bool createChildWindows
-    {
-        get 
-        { 
-            return createChildWindows_;
-        }
-        set
-        {
-            createChildWindows_ = value;
+		[SerializeField] private int desktopIndex_ = 0;
+		public int desktopIndex
+		{
+			get { return desktopIndex_; }
+			set { shouldUpdateWindow = true; desktopIndex_ = (UwcManager.desktopCount > 0) ? Mathf.Clamp(value, 0, UwcManager.desktopCount - 1) : 0; }
+		}
 
-            var manager = GetComponent<UwcWindowTextureChildrenManager>();
-            if (createChildWindows_) {
-                if (!manager) {
-                    gameObject.AddComponent<UwcWindowTextureChildrenManager>();
-                }
-            } else {
-                if (manager) {
-                    Destroy(manager);
-                }
-            }
-        }
-    }
+		[SerializeField] private bool createChildWindows_ = true;
+		public bool createChildWindows
+		{
+			get { return createChildWindows_; }
+			set
+			{
+				createChildWindows_ = value;
+				var childManager = GetComponent<UwcWindowTextureChildrenManager>();
+				if (createChildWindows_)
+				{
+					if (!childManager) gameObject.AddComponent<UwcWindowTextureChildrenManager>();
+				}
+				else
+				{
+					if (childManager) Destroy(childManager);
+				}
+			}
+		}
 
-    public GameObject childWindowPrefab;
-    public float childWindowZDistance = 0.02f;
+		public GameObject childWindowPrefab;
+		public float childWindowZDistance = 0.02f;
 
-    [SerializeField]
-    string partialWindowTitle_;
-    public string partialWindowTitle 
-    {
-        get 
-        {
-            return partialWindowTitle_;
-        }
-        set 
-        {
-            shouldUpdateWindow = true;
-            partialWindowTitle_ = value;
-        }
-    }
+		public CaptureMode captureMode = CaptureMode.Auto;
+		public CapturePriority capturePriority = CapturePriority.Auto;
+		public WindowTextureCaptureTiming captureRequestTiming = WindowTextureCaptureTiming.OnlyWhenVisible;
+		public int captureFrameRate = 30;
+		public bool drawCursor = true;
+		public bool updateTitle = true;
 
-    [SerializeField]
-    int desktopIndex_ = 0;
-    public int desktopIndex
-    {
-        get
-        {
-            return desktopIndex_;
-        }
-        set
-        {
-            shouldUpdateWindow = true;
-            desktopIndex_ = (UwcManager.desktopCount > 0) ?
-                Mathf.Clamp(value, 0, UwcManager.desktopCount - 1) : 0;
-        }
-    }
+		public WindowTextureScaleControlType scaleControlType = WindowTextureScaleControlType.BaseScale;
+		public float scalePer1000Pixel = 1f;
 
-    public CaptureMode captureMode = CaptureMode.Auto;
-    public CapturePriority capturePriority = CapturePriority.Auto;
-    public WindowTextureCaptureTiming captureRequestTiming = WindowTextureCaptureTiming.OnlyWhenVisible;
-    public int captureFrameRate = 30;
-    public bool drawCursor = true;
-    public bool updateTitle = true;
-    public bool searchAnotherWindowWhenInvalid = false;
+		private UwcWindow window_;
+		public UwcWindow window
+		{
+			get { return window_; }
+			set
+			{
+				if (window_ == value) return;
 
-    public WindowTextureScaleControlType scaleControlType = WindowTextureScaleControlType.BaseScale;
-    public float scalePer1000Pixel = 1f;
-    public bool updateScaleForcely = false;
+				if (window_ != null)
+				{
+					window_.onSizeChanged.RemoveListener(OnSizeChanged);
+					window_.SetWindowTexturePtr(System.IntPtr.Zero);
+				}
 
-    static HashSet<UwcWindowTexture> list_ = new HashSet<UwcWindowTexture>();
-    public static HashSet<UwcWindowTexture> list
-    {
-        get { return list_; }
-    }
+				var oldWindow = window_;
+				window_ = value;
+				onWindowChanged.Invoke(window_, oldWindow);
 
-    UwcWindow window_;
-    public UwcWindow window 
-    { 
-        get 
-        {
-            return window_;
-        }
-        set 
-        {
-            if (window_ == value) {
-                return;
-            }
+				if (window_ != null)
+				{
+					shouldUpdateWindow = false;
+					window_.onSizeChanged.AddListener(OnSizeChanged);
+					RecreateTextureIfNeeded();
+					window_.RequestCapture(CapturePriority.High);
+				}
+			}
+		}
 
-            if (window_ != null) {
-                window_.onCaptured.RemoveListener(OnCaptured);
-            }
+		public UwcWindowTextureManager manager { get; set; }
+		public UwcWindowTexture parent { get; set; }
 
-            var old = window_;
-            window_ = value;
-            onWindowChanged_.Invoke(window_, old);
+		public UwcWindowChangeEvent onWindowChanged { get; private set; } = new UwcWindowChangeEvent();
 
-            if (window_ != null) {
-                shouldUpdateWindow = false;
-                window_.onCaptured.AddListener(OnCaptured);
-                window_.RequestCapture(CapturePriority.High);
-            }
-        }
-    }
+		public bool isValid { get { return window != null && window.isValid; } }
+		public Texture2D texture { get; private set; }
 
-    public UwcWindowTextureManager manager { get; set; }
-    public UwcWindowTexture parent { get; set; }
+		private Material material_;
+		private Renderer renderer_;
+		private MeshFilter meshFilter_;
+		private float captureTimer_ = 0f;
+		private bool isCaptureRequested_ = false;
 
-    UwcWindowChangeEvent onWindowChanged_ = new UwcWindowChangeEvent();
-    public UwcWindowChangeEvent onWindowChanged
-    {
-        get { return onWindowChanged_; }
-    }
+		void Awake()
+		{
+			renderer_ = GetComponent<Renderer>();
 
-    float basePixel
-    {
-        get { return 1000f / scalePer1000Pixel; }
-    }
+			// FIX: Safely handle missing renderer for UI Proxy mode
+			if (renderer_ != null)
+			{
+				material_ = renderer_.material;
+			}
 
-    public bool isValid
-    {
-        get
-        {
-            return window != null && window.isValid;
-        }
-    }
+			meshFilter_ = GetComponent<MeshFilter>();
+		}
 
-    Material material_;
-    Renderer renderer_;
-    MeshFilter meshFilter_;
-    Collider collider_;
-    float captureTimer_ = 0f;
-    bool isCaptureRequested_ = false;
-    bool hasBeenCaptured_ = false;
+		void Update()
+		{
+			UpdateSearchTiming();
+			UpdateTargetWindow();
 
-    void Awake()
-    {
-        renderer_ = GetComponent<Renderer>();
-        material_ = renderer_.material; // clone
-        meshFilter_ = GetComponent<MeshFilter>();
-        collider_ = GetComponent<Collider>();
+			if (!isValid)
+			{
+				if (renderer_) renderer_.enabled = false;
+				return;
+			}
 
-        list_.Add(this);
-    }
+			if (renderer_ && !renderer_.enabled)
+			{
+				renderer_.enabled = !window.isIconic && window.isVisible;
+			}
 
-    void OnDestroy()
-    {
-        list_.Remove(this);
-    }
+			window.cursorDraw = drawCursor;
+			window.captureMode = captureMode;
 
-    void Update()
-    {
-        UpdateSearchTiming();
-        UpdateTargetWindow();
+			UpdateScale();
+			UpdateTitle();
+			UpdateCaptureTimer();
+			UpdateRequestCapture();
+		}
 
-        if (!isValid) {
-            material_.mainTexture = null;
-            return;
-        }
+		void OnDisable()
+		{
+			if (window != null) window.SetWindowTexturePtr(System.IntPtr.Zero);
+		}
 
-        UpdateTexture();
-        UpdateRenderer();
-        UpdateScale();
-        UpdateTitle();
-        UpdateCaptureTimer();
-        UpdateRequestCapture();
+		void OnEnable()
+		{
+			if (window != null && texture != null)
+			{
+				window.SetWindowTexturePtr(texture.GetNativeTexturePtr());
+			}
+		}
 
-        UpdateBasicComponents();
-    }
+		void OnDestroy()
+		{
+			if (window != null)
+			{
+				window.onSizeChanged.RemoveListener(OnSizeChanged);
+				window.SetWindowTexturePtr(System.IntPtr.Zero);
+			}
 
-    void OnWillRenderObject()
-    {
-        if (!isCaptureRequested_) return;
+			if (texture)
+			{
+				Destroy(texture);
+				texture = null;
+			}
+		}
 
-        if (captureRequestTiming == WindowTextureCaptureTiming.OnlyWhenVisible) {
-            RequestCapture();
-        }
-    }
+		void OnWillRenderObject()
+		{
+			if (!isCaptureRequested_ || !isValid) return;
 
-    void UpdateTexture()
-    {
-        if (!isValid) return;
+			if (captureRequestTiming == WindowTextureCaptureTiming.OnlyWhenVisible)
+			{
+				RequestCapture();
+			}
+		}
 
-        window.cursorDraw = drawCursor;
+		void OnSizeChanged()
+		{
+			RecreateTextureIfNeeded();
+		}
 
-        if (material_.mainTexture != window.texture) {
-            material_.mainTexture = window.texture;
-        }
-    }
+		void RecreateTextureIfNeeded()
+		{
+			if (!isValid) return;
 
-    void UpdateRenderer()
-    {
-        if (hasBeenCaptured_) {
-            renderer_.enabled = !window.isIconic && window.isVisible;
-        }
-    }
+			int w = window.textureWidth;
+			int h = window.textureHeight;
 
-    void UpdateScale()
-    {
-        if (!isValid || (!updateScaleForcely && window.isChild)) return;
+			if (w <= 0 || h <= 0) return;
 
-        var scale = transform.localScale;
+			if (texture == null || texture.width != w || texture.height != h)
+			{
+				if (texture) Destroy(texture);
 
-        switch (scaleControlType) {
-            case WindowTextureScaleControlType.BaseScale: {
-                var extents = meshFilter_.sharedMesh.bounds.extents;
-                var meshWidth = extents.x * 2f;
-                var meshHeight = extents.y * 2f;
-                var baseHeight = meshHeight * basePixel;
-                var baseWidth = meshWidth * basePixel;
-                scale.x = window.width / baseWidth;
-                scale.y = window.height / baseHeight;
-                break;
-            }
-            case WindowTextureScaleControlType.FixedWidth: {
-                scale.y = transform.localScale.x * window.height / window.width;
-                break;
-            }
-            case WindowTextureScaleControlType.FixedHeight: {
-                scale.x = transform.localScale.y * window.width / window.height;
-                break;
-            }
-            case WindowTextureScaleControlType.Manual: {
-                break;
-            }
-        }
+				texture = new Texture2D(w, h, TextureFormat.BGRA32, false)
+				{
+					filterMode = FilterMode.Bilinear,
+					wrapMode = TextureWrapMode.Clamp
+				};
 
-        if (float.IsNaN(scale.x)) scale.x = 0f;
-        if (float.IsNaN(scale.y)) scale.y = 0f;
+				// FIX: Safely assign material only if it exists
+				if (material_ != null)
+				{
+					material_.mainTexture = texture;
+				}
 
-        transform.localScale = scale;
-    }
+				window.SetWindowTexturePtr(texture.GetNativeTexturePtr());
+			}
+		}
 
-    void UpdateTitle()
-    {
-        if (updateTitle && isValid) {
-            window.RequestUpdateTitle();
-        }
-    }
+		public void RequestCapture()
+		{
+			if (!isValid) return;
 
-    void UpdateCaptureTimer()
-    {
-        if (captureFrameRate < 0) {
-            captureTimer_ = 0f;
-            isCaptureRequested_ = true;
-        } else { 
-            captureTimer_ += Time.deltaTime;
+			isCaptureRequested_ = false;
 
-            float T = 1f / captureFrameRate;
-            if (captureTimer_ < T) return;
+			var priority = capturePriority;
+			if (priority == CapturePriority.Auto)
+			{
+				priority = CapturePriority.Low;
+				if (window == UwcManager.cursorWindow) priority = CapturePriority.High;
+				else if (window.zOrder < UwcSetting.MiddlePriorityMaxZ) priority = CapturePriority.Middle;
+			}
 
-            while (captureTimer_  > T) {
-                captureTimer_ -= T;
-            }
-        }
+			window.RequestCapture(priority);
+		}
 
-        isCaptureRequested_ = true;
-    }
+		void UpdateCaptureTimer()
+		{
+			if (captureFrameRate < 0)
+			{
+				captureTimer_ = 0f;
+				isCaptureRequested_ = true;
+			}
+			else
+			{
+				captureTimer_ += Time.deltaTime;
+				float t = 1f / captureFrameRate;
+				if (captureTimer_ < t) return;
+				while (captureTimer_ > t) captureTimer_ -= t;
+				isCaptureRequested_ = true;
+			}
+		}
 
-    void UpdateRequestCapture()
-    {
-        if (!isCaptureRequested_) return;
+		void UpdateRequestCapture()
+		{
+			if (isCaptureRequested_ && captureRequestTiming == WindowTextureCaptureTiming.EveryFrame)
+			{
+				RequestCapture();
+			}
+		}
 
-        if (captureRequestTiming == WindowTextureCaptureTiming.EveryFrame) {
-            RequestCapture();
-        }
-    }
+		void UpdateSearchTiming()
+		{
+			if (searchTiming == WindowSearchTiming.Always) shouldUpdateWindow = true;
+		}
 
-    void UpdateSearchTiming()
-    {
-        if (searchTiming == WindowSearchTiming.Always) {
-            shouldUpdateWindow = true;
-        }
-    }
+		void UpdateTargetWindow()
+		{
+			if (!shouldUpdateWindow) return;
 
-    void UpdateTargetWindow()
-    {
-        if (!shouldUpdateWindow) return;
+			switch (type)
+			{
+				case WindowTextureType.Window:
+					window = UwcManager.Find(partialWindowTitle, altTabWindow);
+					break;
+				case WindowTextureType.Desktop:
+					window = UwcManager.FindDesktop(desktopIndex);
+					break;
+			}
+		}
 
-        switch (type)
-        {
-            case WindowTextureType.Window:
-                window = UwcManager.Find(partialWindowTitle, altTabWindow);
-                break;
-            case WindowTextureType.Desktop:
-                window = UwcManager.FindDesktop(desktopIndex);
-                break;
-            case WindowTextureType.Child:
-                break;
-        }
-    }
+		void UpdateTitle()
+		{
+			if (updateTitle && isValid) window.RequestUpdateTitle();
+		}
 
-    void UpdateBasicComponents()
-    {
-        if (renderer_) renderer_.enabled = isValid;
-        if (collider_) collider_.enabled = isValid;
-    }
+		void UpdateScale()
+		{
+			// FIX: Safely check for meshFilter and sharedMesh
+			if (!isValid || meshFilter_ == null || meshFilter_.sharedMesh == null) return;
 
-    void OnCaptured()
-    {
-        hasBeenCaptured_ = true;
-    }
+			var scale = transform.localScale;
+			float basePixel = 1000f / scalePer1000Pixel;
 
-    public void RequestCapture()
-    {
-        if (!isValid) return;
+			switch (scaleControlType)
+			{
+				case WindowTextureScaleControlType.BaseScale:
+					var extents = meshFilter_.sharedMesh.bounds.extents;
+					scale.x = window.width / (extents.x * 2f * basePixel);
+					scale.y = window.height / (extents.y * 2f * basePixel);
+					break;
+				case WindowTextureScaleControlType.FixedWidth:
+					scale.y = transform.localScale.x * window.height / window.width;
+					break;
+				case WindowTextureScaleControlType.FixedHeight:
+					scale.x = transform.localScale.y * window.width / window.height;
+					break;
+			}
 
-        isCaptureRequested_ = false;
-        window.captureMode = captureMode;
+			if (float.IsNaN(scale.x)) scale.x = 0f;
+			if (float.IsNaN(scale.y)) scale.y = 0f;
 
-        var priority = capturePriority;
-        if (priority == CapturePriority.Auto) {
-            priority = CapturePriority.Low;
-            if (window == UwcManager.cursorWindow) {
-                priority = CapturePriority.High;
-            } else if (window.zOrder < UwcSetting.MiddlePriorityMaxZ) {
-                priority = CapturePriority.Middle;
-            }
-        }
-
-        window.RequestCapture(priority);
-    }
-
-    public void RequestWindowUpdate()
-    {
-        shouldUpdateWindow = true;
-    }
-
-    static public RayCastResult RayCast(Vector3 from, Vector3 dir, float distance, LayerMask layerMask)
-    {
-        var ray = new Ray();
-        ray.origin = from;
-        ray.direction = dir;
-        RaycastHit hit;
-
-        if (Physics.Raycast(ray, out hit, distance, layerMask)) {
-            var collider = hit.collider;
-            var texture = 
-                collider.GetComponent<UwcWindowTexture>() ??
-                collider.GetComponentInChildren<UwcWindowTexture>();
-            if (texture) {
-                var window = texture.window;
-                var meshFilter = texture.GetComponent<MeshFilter>();
-                if (window != null && meshFilter && meshFilter.sharedMesh) {
-                    var localPos = texture.transform.InverseTransformPoint(hit.point);
-                    var meshScale = 2f * meshFilter.sharedMesh.bounds.extents;
-                    var windowLocalX = (int)((localPos.x / meshScale.x + 0.5f) * window.width);
-                    var windowLocalY = (int)((0.5f - localPos.y / meshScale.y) * window.height);
-                    var desktopX = window.x + windowLocalX;
-                    var desktopY = window.y + windowLocalY;
-                    return new RayCastResult {
-                        hit = true,
-                        texture = texture,
-                        position = hit.point,
-                        normal = hit.normal,
-                        windowCoord = new Vector2(windowLocalX, windowLocalY),
-                        desktopCoord = new Vector2(desktopX, desktopY),
-                    };
-                }
-            }
-        }
-
-        return new RayCastResult() {
-            hit = false,
-        };
-    }
-}
-
+			transform.localScale = scale;
+		}
+	}
 }

@@ -5,9 +5,9 @@
 #include <wrl/client.h>
 #include <mutex>
 #include <atomic>
+#include <memory>
 
 #include "../Core/Buffer.h"
-
 
 enum class CaptureMode
 {
@@ -18,10 +18,12 @@ enum class CaptureMode
     Auto = 3,
 };
 
-
 class Window;
 class WindowsGraphicsCapture;
 
+namespace uWindowCapture {
+    class SharedTextureResource;
+}
 
 class WindowTexture
 {
@@ -73,8 +75,7 @@ private:
     bool isPrintWindowFailed_ = false;
 
     std::atomic<ID3D11Texture2D*> unityTexture_ = nullptr;
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> sharedTexture_;
-    HANDLE sharedHandle_ = nullptr;
+    std::shared_ptr<uWindowCapture::SharedTextureResource> sharedResource_;
     std::mutex sharedTextureMutex_;
 
     Buffer<BYTE> buffer_;

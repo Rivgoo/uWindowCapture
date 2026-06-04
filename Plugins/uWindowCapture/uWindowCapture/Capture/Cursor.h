@@ -5,9 +5,14 @@
 #include <wrl/client.h>
 #include <mutex>
 #include <atomic>
+#include <memory>
 
 #include "../Core/Buffer.h"
 #include "../Core/Thread.h"
+
+namespace uWindowCapture {
+    class SharedTextureResource;
+}
 
 class Cursor
 {
@@ -37,14 +42,8 @@ private:
     void CreateBitmapIfNeeded(HDC hDc, UINT width, UINT height);
     void DeleteBitmap();
 
-    ThreadLoop threadLoop_ = { L"Cursor Capture Thread" };
-
     std::atomic<ID3D11Texture2D*> unityTexture_ = nullptr;
-    Microsoft::WRL::ComPtr<ID3D11Texture2D>  sharedTexture_;
-
-    // FIX #6: Initialize handle to prevent crash in Render()
-    HANDLE sharedHandle_ = nullptr;
-
+    std::shared_ptr<uWindowCapture::SharedTextureResource> sharedResource_;
     std::mutex sharedTextureMutex_;
 
     Buffer<BYTE> buffer_;

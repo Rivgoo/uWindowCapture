@@ -25,7 +25,6 @@
     <ProjectName>uWindowCapture</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -52,13 +51,11 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
-  
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
-  
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -71,9 +68,7 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
-  
   <PropertyGroup Label="UserMacros" />
-  
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(Platform)\$(Configuration)\</IntDir>
@@ -94,7 +89,6 @@
     <IntDir>$(Platform)\$(Configuration)\</IntDir>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
   </PropertyGroup>
-
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -204,10 +198,11 @@
     <ClCompile Include="Graphics\GraphicsManager.cpp" />
     <ClCompile Include="Graphics\D3D11Context.cpp" />
     <ClCompile Include="Graphics\D3D12Context.cpp" />
+    <ClCompile Include="Interop\SharedTextureResource.cpp" />
+    <ClCompile Include="Capture\IsolatedCaptureDevice.cpp" />
     <ClCompile Include="Capture\CaptureManager.cpp" />
     <ClCompile Include="Capture\Cursor.cpp" />
     <ClCompile Include="Capture\IconTexture.cpp" />
-    <ClCompile Include="Capture\UploadManager.cpp" />
     <ClCompile Include="Capture\Window.cpp" />
     <ClCompile Include="Capture\WindowManager.cpp" />
     <ClCompile Include="Capture\WindowTexture.cpp" />
@@ -219,6 +214,7 @@
     <ClInclude Include="Unity\IUnityGraphicsD3D11.h" />
     <ClInclude Include="Unity\IUnityGraphicsD3D12.h" />
     <ClInclude Include="Core\Buffer.h" />
+    <ClInclude Include="Core\ComApartment.h" />
     <ClInclude Include="Core\Debug.h" />
     <ClInclude Include="Core\Message.h" />
     <ClInclude Include="Core\Singleton.h" />
@@ -230,10 +226,11 @@
     <ClInclude Include="Graphics\GraphicsManager.h" />
     <ClInclude Include="Graphics\D3D11Context.h" />
     <ClInclude Include="Graphics\D3D12Context.h" />
+    <include Include="Interop\SharedTextureResource.h" />
+    <ClInclude Include="Capture\IsolatedCaptureDevice.h" />
     <ClInclude Include="Capture\CaptureManager.h" />
     <ClInclude Include="Capture\Cursor.h" />
     <ClInclude Include="Capture\IconTexture.h" />
-    <ClInclude Include="Capture\UploadManager.h" />
     <ClInclude Include="Capture\Window.h" />
     <ClInclude Include="Capture\WindowManager.h" />
     <ClInclude Include="Capture\WindowTexture.h" />

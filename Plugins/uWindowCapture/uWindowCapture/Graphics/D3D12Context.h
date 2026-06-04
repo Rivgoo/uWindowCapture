@@ -1,31 +1,43 @@
 #pragma once
 #include "IGraphicsContext.h"
+#include "../Unity/IUnityGraphicsD3D12.h"
 #include <d3d12.h>
-#include <d3d11on12.h>
+#include <wrl/client.h>
 #include <unordered_map>
 #include <mutex>
 
+namespace uWindowCapture {
+
+class SharedTextureResource;
+
 class D3D12Context : public IGraphicsContext {
 public:
-    bool Initialize() override;
+    bool Initialize(IUnityInterfaces* unityInterfaces) override;
     void Finalize() override;
     
-    void Lock() override { mutex_.lock(); }
-    void Unlock() override { mutex_.unlock(); }
-    
-    ID3D11Device* GetDevice() override { return d3d11Device_.Get(); }
-    ID3D11DeviceContext* GetContext() override { return d3d11Context_.Get(); }
-    
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> CreateTexture(int width, int height) override;
-    void UpdateUnityTexture(void* unityTexturePtr, ID3D11Texture2D* source) override;
-    void ReleaseUnityTexture(void* unityTexturePtr) override;
+    void RenderEvent(int eventId) override;
+
+    void RegisterSharedResource(void* unityTexturePtr, SharedTextureResource* sharedResource) override;
+    void UnregisterSharedResource(void* unityTexturePtr) override;
 
 private:
-    Microsoft::WRL::ComPtr<ID3D12Device> d3d12Device_;
-    Microsoft::WRL::ComPtr<ID3D11Device> d3d11Device_;
-    Microsoft::WRL::ComPtr<ID3D11DeviceContext> d3d11Context_;
-    Microsoft::WRL::ComPtr<ID3D11On12Device> d3d11On12Device_;
+    bool CreateCommandObjects();
+
+    Microsoft::WRL::ComPtr<ID3D12Device> device_;
+    IUnityGraphicsD3D12v5* d3d12Unity_ = nullptr;
     
-    std::unordered_map<void*, Microsoft::WRL::ComPtr<ID3D11Resource>> wrappedResources_;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator_;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
+
+    struct ResourceMap {
+        SharedTextureResource* source;
+        Microsoft::WRL::ComPtr<ID3D12Resource> openedTexture;
+        Microsoft::WRL::ComPtr<ID3D12Fence> openedFence;
+        uint64_t lastProcessedFenceValue = 0;
+    };
+
+    std::unordered_map<void*, ResourceMap> resources_;
     std::mutex mutex_;
 };
+
+} 

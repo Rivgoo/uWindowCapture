@@ -1,24 +1,35 @@
 #pragma once
 #include "IGraphicsContext.h"
+#include <d3d11_4.h>
+#include <wrl/client.h>
+#include <unordered_map>
 #include <mutex>
+
+namespace uWindowCapture {
 
 class D3D11Context : public IGraphicsContext {
 public:
-    bool Initialize() override;
+    bool Initialize(IUnityInterfaces* unityInterfaces) override;
     void Finalize() override;
     
-    void Lock() override { mutex_.lock(); }
-    void Unlock() override { mutex_.unlock(); }
-    
-    ID3D11Device* GetDevice() override { return device_.Get(); }
-    ID3D11DeviceContext* GetContext() override { return context_.Get(); }
-    
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> CreateTexture(int width, int height) override;
-    void UpdateUnityTexture(void* unityTexturePtr, ID3D11Texture2D* source) override;
-    void ReleaseUnityTexture(void* unityTexturePtr) override;
+    void RenderEvent(int eventId) override;
+
+    void RegisterSharedResource(void* unityTexturePtr, SharedTextureResource* sharedResource) override;
+    void UnregisterSharedResource(void* unityTexturePtr) override;
 
 private:
-    Microsoft::WRL::ComPtr<ID3D11Device> device_;
-    Microsoft::WRL::ComPtr<ID3D11DeviceContext> context_;
+    Microsoft::WRL::ComPtr<ID3D11Device5> device_;
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext4> context_;
+    
+    struct ResourceMap {
+        SharedTextureResource* source;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> openedTexture;
+        Microsoft::WRL::ComPtr<ID3D11Fence> openedFence;
+        uint64_t lastProcessedFenceValue = 0;
+    };
+
+    std::unordered_map<void*, ResourceMap> resources_;
     std::mutex mutex_;
 };
+
+} 

@@ -1,74 +1,106 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace uWindowCapture
 {
-
-[RequireComponent(typeof(Renderer))]
-public class UwcIconTexture : MonoBehaviour
-{
-    [SerializeField] UwcWindowTexture windowTexture_;
-    public UwcWindowTexture windowTexture
+    [RequireComponent(typeof(Renderer))]
+    public class UwcIconTexture : MonoBehaviour
     {
-        get
+        [SerializeField] private UwcWindowTexture windowTexture_;
+        
+        public UwcWindowTexture windowTexture
         {
-            return windowTexture_;
-        }
-        set
-        {
-            windowTexture_ = value;
-            if (windowTexture_) {
-                window = windowTexture_.window;
+            get { return windowTexture_; }
+            set
+            {
+                windowTexture_ = value;
+                if (windowTexture_) window = windowTexture_.window;
             }
         }
-    }
 
-    UwcWindow window_ = null;
-    public UwcWindow window
-    {
-        get
+        private UwcWindow window_;
+        public UwcWindow window
         {
-            return window_;
-        }
-        set
-        {
-            window_ = value;
+            get { return window_; }
+            set
+            {
+                if (window_ != null)
+                {
+                    window_.onIconCaptured.RemoveListener(OnIconCaptured);
+                    window_.SetIconTexturePtr(System.IntPtr.Zero);
+                }
 
-            if (window_ != null) {
-                if (!window_.hasIconTexture) {
+                window_ = value;
+
+                if (window_ != null)
+                {
                     window_.onIconCaptured.AddListener(OnIconCaptured);
+                    RecreateTextureIfNeeded();
                     window_.RequestCaptureIcon();
-                } else {
-                    OnIconCaptured();
                 }
             }
         }
-    }
 
-    bool isValid
-    {
-        get
+        public Texture2D texture { get; private set; }
+        private Material material_;
+
+        public bool isValid { get { return window != null; } }
+
+        void Awake()
         {
-            return window != null;
+            material_ = GetComponent<Renderer>().material;
         }
-    }
 
-    void Update()
-    {
-        if (windowTexture != null) {
-            if (window == null || window != windowTexture_.window) {
-                window = windowTexture_.window;
+        void Update()
+        {
+            if (windowTexture != null)
+            {
+                if (window == null || window != windowTexture.window)
+                {
+                    window = windowTexture.window;
+                }
             }
         }
+
+        void OnDestroy()
+        {
+            if (window != null)
+            {
+                window.onIconCaptured.RemoveListener(OnIconCaptured);
+                window.SetIconTexturePtr(System.IntPtr.Zero);
+            }
+            if (texture) Destroy(texture);
+        }
+
+        void RecreateTextureIfNeeded()
+        {
+            if (!isValid) return;
+
+            int w = window.iconWidth;
+            int h = window.iconHeight;
+            if (w <= 0 || h <= 0) return;
+
+            if (texture == null || texture.width != w || texture.height != h)
+            {
+                if (texture) Destroy(texture);
+                
+                texture = new Texture2D(w, h, TextureFormat.BGRA32, false)
+                {
+                    filterMode = FilterMode.Bilinear,
+                    wrapMode = TextureWrapMode.Clamp
+                };
+
+                window.SetIconTexturePtr(texture.GetNativeTexturePtr());
+                material_.mainTexture = texture;
+            }
+        }
+
+        void OnIconCaptured()
+        {
+            if (!isValid) return;
+            RecreateTextureIfNeeded();
+            
+            // Icon is static, no need to listen constantly after first successful capture
+            window.onIconCaptured.RemoveListener(OnIconCaptured);
+        }
     }
-
-    void OnIconCaptured()
-    {
-        if (!isValid) return;
-
-        var renderer = GetComponent<Renderer>();
-        renderer.material.mainTexture = window.iconTexture;
-        window.onIconCaptured.RemoveListener(OnIconCaptured);
-    }
-}
-
 }
